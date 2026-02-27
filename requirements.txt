@@ -1,0 +1,15 @@
+streamlit
+sqlalchemy
+snowflake-connector-python
+sentence-transformers
+groq
+faiss-cpu
+pypdf
+transformers
+torch
+python-dotenv
+python-dateutil
+accelerate
+pandas
+google-genai
+rank_bm25
