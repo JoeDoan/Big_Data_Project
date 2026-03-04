@@ -1,5 +1,7 @@
 # LexGuard: The Neuro-Symbolic Compliance Auditor
 
+**Video Demo:** https://umsystem.hosted.panopto.com/Panopto/Pages/Viewer.aspx?id=dc401bd7-7c2a-4ee2-b4ee-b403016778f6
+
 **Team Members:**
 * **Manan Koradiya** 
 * **Joe Doan** 
