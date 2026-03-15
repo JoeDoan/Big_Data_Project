@@ -1,27 +1,34 @@
 import streamlit as st
 import os
 
-# Import our working agent loop
-from agent import run_lexguard_agent
+# Import our working agent loops
+from agent import run_lexguard_agent as run_baseline_agent
+from adapted_agent import run_adapted_agent
 
 # 1. Page Configuration
 st.set_page_config(page_title="LexGuard Auditor", page_icon="⚖️", layout="centered")
 st.title("⚖️ LexGuard Compliance Auditor")
 st.markdown("A Neuro-Symbolic Agent for auditing Residential Lease Agreements.")
 
-# 2. Sidebar Configuration (The MFA Fix)
+# --- SIDEBAR CONFIGURATION ---
 with st.sidebar:
-    st.header("⚙️ Database Authentication")
-    st.write("Snowflake requires a live MFA code to fetch contract clauses.")
+    st.header("⚙️ Configuration")
     
-    mfa_code = st.text_input("Enter 6-digit TOTP Code:", type="password", max_chars=6)
+    st.markdown("### AI Model Selection")
+    st.markdown("Select which pipeline LexGuard should use for your audit:")
+    pipeline_choice = st.radio(
+        "Audit Pipeline:",
+        ("Baseline (Gemini API)", "Adapted (Mistral PEFT)")
+    )
     
-    if mfa_code:
-        # Save the code temporarily in the environment so tools.py can grab it
-        os.environ["SNOW_MFA"] = mfa_code
-        st.success("MFA code cached for this session.")
+    if pipeline_choice == "Adapted (Mistral PEFT)":
+        st.info("🧠 **Domain-Adapted Mode:** Using your custom-trained LoRA adapter hosted on HuggingFace to extract legal facts, followed by deterministic Python risk rules.")
     else:
-        st.warning("⚠️ Please enter your MFA code before chatting.")
+        st.info("🔮 **Baseline Mode:** Using the generic Gemini 2.5 Flash model with standard RAG retrieval.")
+        
+    st.markdown("---")
+    
+    st.markdown("### 📊 System Status")
 
 # 3. Initialize Conversation History (Rubric Requirement)
 if "messages" not in st.session_state:
@@ -42,22 +49,17 @@ if prompt := st.chat_input("e.g., Are there any high-risk indemnification clause
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Block the request if the user forgot their MFA code
-    if not os.getenv("SNOW_MFA"):
-        error_msg = "I need your Snowflake MFA code in the sidebar to read the contracts!"
-        with st.chat_message("assistant"):
-            st.error(error_msg)
-        st.session_state.messages.append({"role": "assistant", "content": error_msg})
-        st.stop()
-
     # 6. Loading Indicator & Agent Execution (Rubric Requirement)
+    # Send the query to the selected pipeline
     with st.chat_message("assistant"):
-        with st.spinner("🧠 LexGuard is recalling clauses and reasoning..."):
-            # Call the agent engine we built!
-            final_response = run_lexguard_agent(prompt)
+        with st.spinner(f"LexGuard is analyzing using {pipeline_choice}..."):
+            if pipeline_choice == "Adapted (Mistral PEFT)":
+                response = run_adapted_agent(prompt)
+            else:
+                response = run_baseline_agent(prompt)
             
         # Display the final verdict
-        st.markdown(final_response)
+        st.markdown(response)
         
     # Save the agent's response to history
-    st.session_state.messages.append({"role": "assistant", "content": final_response})
+    st.session_state.messages.append({"role": "assistant", "content": response})

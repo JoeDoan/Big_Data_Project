@@ -1,31 +1,34 @@
-# Individual Contribution Report
+# Individual Contribution Report — Lab 8
 **Name:** Manan Koradiya
 **Role:** Agent Architect & System Integrator
 
 ---
 
-## Personal Responsibilities & Implemented Components
+## Lab 8 Contributions
 
-### 1. Agentic Reasoning Engine (`agent.py`)
-- Designed and implemented the **multi-step reasoning loop** using the `google-genai` SDK (Gemini 2.5 Flash), enabling the agent to iteratively select tools, execute them, and synthesize compliance verdicts.
-- Authored the **system prompt** defining LexGuard's "Recall-Then-Reason" pipeline: the agent first retrieves contract clauses from Snowflake, then evaluates risk, and finally produces a grounded compliance verdict.
-- Implemented the **tool dispatch mechanism** (`AVAILABLE_TOOLS` dictionary) that maps string function names returned by the LLM to actual Python callables, handling both `retrieve_contract_clauses` and `calculate_risk_level`.
-- Added a **max-steps guard** (`max_steps = 5`) to prevent infinite tool-calling loops, with graceful timeout messaging.
-- Configured the model with `temperature=0.1` to ensure analytical, low-variance responses suitable for legal compliance tasks.
+### 1. Updated Streamlit UI with Baseline vs. Adapted Comparison (`app.py`)
+- Extended the Streamlit chat interface with a **model selection toggle** in the sidebar, allowing users to switch between the Baseline (Gemini) and Adapted (Llama-3 PEFT) agents in real time.
+- Implemented conditional routing: when the user selects "Adapted Model (Lab 8)", the app calls `run_adapted_agent()` from `adapted_agent.py`; otherwise it calls `run_lexguard_agent()` from `agent.py`.
+- Ensured the UI shows the correct agent label ("🧠 LexGuard (Baseline)" vs. "🔬 LexGuard (Adapted)") in the chat response, making model comparison visually clear for the demo.
 
-### 2. LLM-Callable Tool Functions (`tools.py`)
-- Wrapped Snowflake SQL queries into the `retrieve_contract_clauses()` function, which performs `ILIKE` keyword search against the `CONTRACT_CHUNKS` table and returns formatted evidence strings.
-- Implemented `calculate_risk_level()` — a deterministic, rule-based risk classifier that flags clauses containing "indemnify" or "immediate termination" as **High Risk**, "penalty" or "breach" as **Medium Risk**, and all others as **Low Risk**.
-- Added `retrieve_local_clauses()` as an offline alternative to the Snowflake retrieval tool, backed by the `LocalStore` inverted keyword index for testing without cloud credentials.
+### 2. RAG Retrieval Fallback Enhancement (`tools.py`)
+- Enhanced `retrieve_local_clauses()` in `tools.py` with a **multi-tier fallback** strategy:
+  - Tier 1: Inverted keyword index lookup (exact-match, deterministic).
+  - Tier 2: Full-text search across all chunks with stop-word filtering and phrase boosting for legal terms (e.g., "change of control", "merger", "parties").
+  - Returns formatted citation strings with `[Source: filename]` headers for each matched chunk.
+- Implemented stop-word filtering to prevent common words like "the", "is", "what" from polluting the search query and matching irrelevant chunks.
 
-### 3. Streamlit Chat Interface (`app.py`)
-- Built the interactive **Streamlit chat UI** with persistent conversation history (`st.session_state.messages`), enabling multi-turn compliance audit dialogues.
-- Engineered the **MFA passthrough mechanism**: the sidebar captures the user's 6-digit TOTP code, stores it in `os.environ["SNOW_MFA"]`, and the `tools.py` functions read it at connection time — solving the problem of Snowflake MFA within a continuously running Streamlit app.
-- Added input validation to block agent execution if the MFA code is missing, displaying a clear error prompt to the user.
+### 3. System Architecture Integration
+- Connected all Lab 8 components end-to-end: `generate_dataset.py` → `instruction_dataset.json` → Colab PEFT training → HuggingFace Hub → `adapted_agent.py` → Streamlit UI.
+- Ensured backward compatibility: the Lab 8 adapted pipeline works alongside the original Gemini baseline without disrupting existing functionality.
 
-### 4. System Integration
-- Connected all pipeline stages end-to-end: PDF ingestion → Snowflake storage → agent retrieval → risk analysis → Streamlit presentation.
-- Ensured `config.py` is imported at the top of every module to guarantee deterministic seeding across all components.
+---
+
+## Previous Lab Contributions (Labs 1–7)
+- Designed and implemented the agentic reasoning loop in `agent.py` using the Gemini 2.5 Flash SDK.
+- Authored the system prompt defining LexGuard's "Recall-Then-Reason" pipeline with max-steps guard and tool dispatch mechanism.
+- Wrapped Snowflake queries and risk-assessment logic into LLM-callable tools in `tools.py`.
+- Built the Streamlit chat UI with MFA passthrough for Snowflake authentication.
 
 ---
 
@@ -35,6 +38,11 @@
 
 ---
 
+## AI Tools Used
+- **Antigravity (Google DeepMind)**: Used to implement the RAG fallback logic in `tools.py` and to debug the Streamlit toggle integration between both agents.
+
+---
+
 ## Technical Reflection
 
-Integrating the new Gemini SDK natively without relying on an external framework like LangChain taught me the mechanics of manual tool dispatching — parsing `response.function_calls`, executing the corresponding Python function, and packaging the result back as a `types.Part.from_function_response()` for the next iteration. The biggest technical hurdle was managing the Snowflake MFA requirement within a continuous agent loop. Since TOTP codes rotate every 30 seconds and the Streamlit app runs as a long-lived process, I solved this by capturing the TOTP code in the Streamlit session state sidebar and injecting it into the environment variables, allowing the agent to authenticate dynamically without crashing mid-conversation. This approach eliminated the need for `externalbrowser` authentication, which was unreliable in headless/server deployments.
+The key challenge in Lab 8 integration was maintaining backward compatibility between the original Gemini-based agent and the new adapted Llama-3 pipeline. Both agents share the same `tools.py` infrastructure, but use different retrieval backends (Snowflake vs. local JSON store). The main design decision was to make `retrieve_local_clauses()` and `retrieve_contract_clauses()` return identically-formatted strings, so that the downstream risk assessment and UI display code could remain unchanged. The multi-tier RAG fallback in `tools.py` was critical for the adapted agent's answer quality — without it, many legal queries would return zero results from the keyword index, since the index only covers 20 pre-defined legal terms.

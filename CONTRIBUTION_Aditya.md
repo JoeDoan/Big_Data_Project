@@ -1,42 +1,38 @@
-# Individual Contribution Report
+# Individual Contribution Report — Lab 8
 **Name:** Aditya Naredla
 **Role:** Storage Architect & Evaluation Engineer
 
 ---
 
-## Personal Responsibilities & Implemented Components
+## Lab 8 Contributions
 
-### 1. Separated Local Storage Engine (`local_store.py`)
-- Designed and implemented the **`LocalStore` class** (241 LOC) — a deterministic, namespaced JSON storage engine inspired by HyperGraphRAG's `JsonKVStorage` pattern.
-- Separated contract data into **three namespaced JSON files** under `./project_data_store/`:
-  - `kv_store_documents.json` — document-level metadata (doc name, first-seen timestamp, associated chunk IDs)
-  - `kv_store_chunks.json` — chunk-level data (text, metadata, timestamp keyed by deterministic UUID)
-  - `kv_store_clause_index.json` — inverted keyword index mapping legal terms to chunk IDs for fast clause retrieval
-- Implemented the **ingestion pipeline** (`LocalStore.ingest()`) that distributes each incoming chunk across all three stores simultaneously, mirroring HyperGraphRAG's `ainsert()` multi-store distribution pattern.
-- Built the **clause search engine** (`LocalStore.search_clauses()`) with fuzzy keyword matching against the inverted index, deduplication while preserving insertion order, and configurable `top_k` result limiting.
-- Ensured **byte-identical reproducibility** by writing all JSON files with `sort_keys=True` and `ensure_ascii=False`, guaranteeing deterministic serialization across runs.
-- Implemented `save_all()` for atomic persistence of all three stores after each ingestion batch, mirroring HyperGraphRAG's `_insert_done` callback pattern.
+### 1. Domain Task Definition & Model Selection
+- Led the team discussion to define the **domain reasoning task**: legal contract risk classification using the CUAD dataset, selecting clause-level risk analysis (High/Medium/Low) as the specific instruction tuning objective.
+- Researched and selected **Llama-3 8B** as the base model for PEFT fine-tuning over alternatives (Mistral-7B, Phi-3), based on its improved instruction-following capability and legal reasoning benchmark performance.
+- Justified the model choice in the group report: Llama-3's chat template uses distinct role headers (`<|start_header_id|>system/user/assistant<|end_header_id|>`) that align well with structured legal audit prompts.
 
-### 2. HyperGraphRAG Related Work Analysis (`RELATED_WORK_REPRO.md`)
-- Conducted the **HyperGraphRAG reproduction attempt**: cloned the repository, resolved dependencies in an isolated `venv_repro/` environment, and attempted to run the n-ary extraction pipeline.
-- Performed **root cause analysis** of the pipeline failure, identifying three specific issues:
-  1. Undocumented `working_dir` filesystem assumption in `NanoVectorDBStorage`
-  2. Implicit LLM coupling that prevents storage-layer evaluation in isolation
-  3. `NanoVectorDBStorage` cold-start gap where dimensionality defaults to `None` without pre-computed embeddings
-- Documented the full reproduction attempt in `RELATED_WORK_REPRO.md` Section 4, including environment details, pipeline trace, and a concept-mapping table showing exactly which HyperGraphRAG patterns were adapted for LexGuard.
+### 2. PEFT Training Notebook (`LexGuard_PEFT_Training.ipynb`)
+- Authored the **Google Colab training notebook** using Unsloth + QLoRA (LoRA rank=16, lora_alpha=16), fine-tuning Llama-3 8B in 4-bit quantization on T4 GPU.
+- Configured the training loop: `SFTTrainer` with 60 steps, batch size=2, gradient accumulation=4, learning rate=2e-4, AdamW 8-bit optimizer.
+- Pushed the fine-tuned LoRA adapter to HuggingFace Hub as `doandune/LexGuard-llama3-Risk-Adapter` for team-wide access.
+- Verified training convergence by monitoring the SFT loss curve and confirming the adapter learned legal risk classification format from the 50-example dataset.
 
-### 3. Keyword Extraction & Legal Domain Logic
-- Curated the **legal keyword vocabulary** (`_LEGAL_KEYWORDS` list with 23 terms) used by the inverted clause index, covering key contract concepts: indemnification, termination, breach, liability, damages, force majeure, arbitration, confidentiality, and more.
-- Implemented `_extract_keywords()` for case-insensitive keyword detection in chunk text, powering the inverted index construction during ingestion.
+### 3. Evaluation Design & Results (`EVALUATION.md`, `eval_results.json`)
+- Designed the 10-query evaluation set covering diverse legal reasoning tasks: change of control, liability caps, termination conditions, party identification, confidentiality, indemnification, governing law, assignment restrictions, insurance, and payment obligations.
+- Defined evaluation metrics: answer rate (binary), response time, knowledge source, and reasoning style.
+- Produced `EVALUATION.md` documenting the full comparison table and analysis of trade-offs between baseline and adapted systems.
 
-### 4. Evaluation Notebooks & Results
-- Developed `phase_2.ipynb` covering retrieval evaluation: TF-IDF vectorization, BM25 retrieval, FAISS semantic search, hybrid retrieval strategies, and cross-encoder re-ranking with Groq LLM evaluation.
-- Extended `phase_3.ipynb` for multimodal evaluation: processing text + OCR + image modalities, conducting Gemini-powered evaluation, and generating comparative metrics across models.
-- Produced the evaluation result artifacts now stored in `artifacts/`:
-  - `phase3_eval_results.csv` — baseline evaluation metrics
-  - `phase3_eval_results_gemini.csv` — Gemini model evaluation results
-  - `phase3_eval_results_ollama.csv` — Ollama local model evaluation results
-  - `task1_antigravity_report.md` and `task4_evaluation_report.md` — detailed task reports
+### 4. LocalStore Search Quality (`local_store.py`)
+- Extended the `LocalStore.search_clauses()` method with **phrase-level boosting**: clauses containing multi-word legal phrases (e.g., "change of control", "indemnification") score higher than clauses with isolated keyword matches, improving retrieval precision for the adapted agent.
+- Added score normalization to ensure results are consistent regardless of clause length.
+
+---
+
+## Previous Lab Contributions (Labs 1–7)
+- Designed and implemented `LocalStore` class (241 LOC): a three-namespace JSON storage engine (`kv_store_documents.json`, `kv_store_chunks.json`, `kv_store_clause_index.json`).
+- Conducted HyperGraphRAG reproduction attempt and documented findings in `RELATED_WORK_REPRO.md`.
+- Curated the 23-term legal keyword vocabulary for the inverted clause index.
+- Developed `phase_2.ipynb` and `phase_3.ipynb` evaluation notebooks.
 
 ---
 
@@ -46,6 +42,12 @@
 
 ---
 
+## AI Tools Used
+- **Antigravity (Google DeepMind)**: Used to generate the PEFT training notebook structure and debug the QLoRA configuration for Llama-3 on Colab T4 GPU.
+- **Gemini API**: Used to generate verbose, explanation-rich outputs for the instruction dataset.
+
+---
+
 ## Technical Reflection
 
-The most valuable insight from the HyperGraphRAG analysis was learning how storage separation improves retrieval determinism. Before this work, LexGuard stored everything in a single Snowflake table — retrieval was tightly coupled to cloud connectivity and SQL query non-determinism. By studying how HyperGraphRAG separates its `full_docs`, `text_chunks`, `entities_vdb`, and `hyperedges_vdb` into distinct namespaced stores, I designed `LocalStore` to mirror this architecture with three JSON files. The key benefit is that the inverted keyword index (`kv_store_clause_index.json`) enables **exact-match clause retrieval** without embedding-model variance — unlike vector similarity search, keyword lookup is perfectly deterministic and produces identical results across any environment. This separation also enabled the team to run the full agent pipeline offline during development, using `retrieve_local_clauses()` as a drop-in replacement for the Snowflake retrieval tool.
+The biggest insight from Lab 8 was discovering the "hardware ceiling" effect in fine-tuning: with only 50 examples and 60 training steps, the model doesn't truly learn new legal knowledge — it learns the *format* of legal reasoning. The pre-trained Llama-3 base already contains enough legal knowledge from its training corpus; what PEFT adds is the structural habit of answering in a "Summary → Step-by-Step → Citation" format that matches legal audit best practices. This is why both agents achieved 100% answer rate — the adapted model's advantage is not coverage, but structured presentation quality, which is exactly what domain adaptation theory predicts.

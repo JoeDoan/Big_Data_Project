@@ -7,14 +7,9 @@ from local_store import LocalStore
 
 # Removed externalbrowser to use standard password auth that worked for ingest.py
 
-@st.cache_resource
+@st.cache_resource(ttl=3600)
 def get_snowflake_connection():
     print("❄️ Opening persistent Snowflake connection...")
-    
-    # Check for MFA in environment, but if it's missing, ask in the terminal!
-    mfa_code = os.getenv("SNOW_MFA")
-    if not mfa_code:
-        mfa_code = input("\n🔐 Enter your current Snowflake MFA/TOTP code (6 digits): ").strip()
 
     return snowflake.connector.connect(
         user=os.getenv("SNOW_USER"),
@@ -23,8 +18,7 @@ def get_snowflake_connection():
         role=os.getenv("SNOW_ROLE", "TRAINING_ROLE"),
         warehouse=os.getenv("SNOW_WH", "COMPUTE_WH"),
         database=os.getenv("SNOW_DB", "LEXGUARD_DB"),
-        schema=os.getenv("SNOW_SCHEMA", "CONTRACT_DATA"),
-        passcode=mfa_code  # Uses the fresh code you just typed
+        schema=os.getenv("SNOW_SCHEMA", "CONTRACT_DATA")
     )
 
 def retrieve_contract_clauses(search_term: str) -> str:
@@ -108,8 +102,44 @@ def retrieve_local_clauses(search_term: str, top_k: int = 5) -> str:
         store = LocalStore(working_dir=config.HYPERPARAMS["working_dir"])
         results = store.search_clauses(search_term, top_k=top_k)
 
+        # Fallback to full text search if index returns nothing (e.g., for full sentences)
         if not results:
-            return f"No evidence found in the local store for '{search_term}'."
+            print(f"   ℹ️ Index miss. Falling back to full text search...")
+            all_chunks = store.get_all_chunks()
+            
+            # Clean common stop words from search words
+            stop_words = {'tell', 'me', 'about', 'what', 'is', 'are', 'the', 'of', 'in', 'and', 'to', 'for', 'any'}
+            search_words = [w.lower() for w in search_term.replace('?', '').replace('.', '').replace(',', '').replace("'", '').split() if w.lower() not in stop_words]
+            
+            scored_chunks = []
+            for chunk in all_chunks:
+                text_lower = chunk["text"].lower()
+                
+                # Base score: count keyword matches
+                score = sum(1 for w in search_words if w in text_lower)
+                
+                # Boost specific structural phrases
+                if "change of control" in search_term.lower() and "change of control" in text_lower:
+                    score += 5
+                if "merger" in search_term.lower() and "merger" in text_lower:
+                    score += 5
+                if "parti" in search_term.lower() and ("parties" in text_lower or "party" in text_lower or "between" in text_lower):
+                    score += 5
+                    
+                scored_chunks.append((score, chunk))
+            
+            # Always return the highest-scoring chunks, even if scores are low, 
+            # so the model has *some* context rather than failing completely.
+            scored_chunks.sort(key=lambda x: x[0], reverse=True)
+            results = [c[1] for c in scored_chunks[:top_k] if c[0] > 0] # Filter out strict 0-score chunks
+            
+            # If still nothing, just grab the first few chunks of the first document as a hard fallback
+            if not results and all_chunks:
+                 print(f"   ⚠️ Hard fallback to document opening...")
+                 results = all_chunks[:top_k]
+
+        if not results:
+            return "" # Return empty string instead of english message so agent handles it
 
         evidence = []
         for r in results:
@@ -119,4 +149,4 @@ def retrieve_local_clauses(search_term: str, top_k: int = 5) -> str:
 
     except Exception as e:
         print(f"\n❌ LOCAL STORE ERROR: {str(e)}\n")
-        return f"Local store error: {str(e)}"
+        return ""

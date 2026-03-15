@@ -1,41 +1,42 @@
-# Individual Contribution Report
+# Individual Contribution Report — Lab 8
 **Name:** Ruixuan Hou
 **Role:** Reproducibility & Testing Lead
 
 ---
 
-## Personal Responsibilities & Implemented Components
+## Lab 8 Contributions
 
-### 1. Deterministic Configuration System (`config.py`)
-- Designed and implemented the **centralized configuration module** that seeds all sources of randomness on import: Python's `random`, NumPy's RNG, PyTorch (with CUDA and cuDNN determinism flags), and `PYTHONHASHSEED`.
-- Built the **deterministic UUID generator** (`get_seeded_uuid()`) — a custom implementation that generates UUID-4-formatted strings from a seeded `random.Random` instance, ensuring identical chunk IDs across runs without relying on the non-deterministic `uuid.uuid4()`.
-- Centralized all pipeline hyperparameters into the `HYPERPARAMS` dictionary with environment-variable overrides, providing a single source of truth for `GLOBAL_SEED`, `MIN_TEXT_CHARS`, `AGENT_TEMPERATURE`, `AGENT_MAX_STEPS`, `RETRIEVAL_TOP_K`, and `working_dir`.
-- Implemented **device auto-detection** (`get_device()`) with priority: Apple Silicon MPS → NVIDIA CUDA → CPU, ensuring the pipeline runs optimally across different hardware.
+### 1. Reproducibility of PEFT Pipeline
+- Updated `REPRO_AUDIT.md` to document the Lab 8 domain adaptation pipeline reproducibility:
+  - Documented the Colab environment: Unsloth + QLoRA dependencies, T4 GPU requirements, and Python version constraints.
+  - Noted the **non-determinism boundary**: model training steps are deterministic given `seed=3407`; however, GPU floating-point operations (cuDNN) may produce ±0.1% loss variation across hardware.
+  - Documented that the fine-tuned LoRA adapter is pinned on HuggingFace Hub at `doandune/LexGuard-llama3-Risk-Adapter` to ensure reproducible inference.
 
-### 2. Centralized Logging & Metrics (`lexguard_logger.py`)
-- Built the **structured logging framework** with dual output (console + rotating log file at `logs/pipeline_run.log`), using ISO-8601 timestamps and severity-level formatting.
-- Implemented `log_hyperparams()` for formatted parameter logging at pipeline start, and `log_metrics()` for recording arbitrary key-value execution metrics with UTC timestamps.
-- Created `write_run_manifest()` to generate `artifacts/run_manifest.json` — a JSON summary of each pipeline run containing completion timestamp, hyperparameters, and all recorded metrics.
-- Set up automatic directory creation for `logs/` and `artifacts/` on module import, ensuring the pipeline never fails due to missing output directories.
+### 2. Updated `reproduce.sh` for Lab 8
+- Extended `reproduce.sh` to include Lab 8 dependencies: `python-dotenv`, `requests`, and the evaluation runner.
+- Added a `run_evaluation.py` execution step that automatically re-runs the 10-query evaluation and saves results to `eval_results.json` and `EVALUATION.md`.
+- Added a validation step that checks the Ngrok API URL is set in `.env` before attempting inference.
 
-### 3. Smoke Test Suite (`tests/test_smoke.py`)
-- Authored all **11 smoke tests** covering the full pipeline without requiring external API keys or Snowflake connectivity:
-  - `test_pdf_discovery` — verifies `discover_pdfs()` finds all contracts in `./data/`
-  - `test_chunk_extraction` — validates chunk schema (`CHUNK_ID`, `DOC_NAME`, `CHUNK_TEXT`, `METADATA`, `UPLOAD_TIMESTAMP`)
-  - `test_build_dataframe` — confirms DataFrame column ordering matches the Snowflake table schema
-  - `test_risk_calculator_high/medium/low` — unit tests for the rule-based risk classifier
-  - `test_clean_text` — edge-case testing for whitespace normalization (empty strings, `None`, newlines/tabs)
-  - `test_deterministic_uuids` — proves that resetting the UUID RNG seed produces identical chunk IDs
-  - `test_local_store_separation` — validates that `LocalStore.ingest()` creates three separate JSON files
-  - `test_local_store_search` — tests the clause keyword search returns correct results and returns empty for absent keywords
-  - `test_local_store_determinism` — proves two independent ingestion runs (after seed reset) produce byte-identical JSON stores (after stripping wall-clock timestamps)
-- Designed the `data_dir` pytest fixture to point tests at the real contract PDFs in `./data/`, ensuring tests validate against actual production data.
+### 3. Smoke Test Extensions (`tests/test_smoke.py`)
+- Added smoke tests for the Lab 8 adapted pipeline:
+  - `test_instruction_dataset_format` — validates `instruction_dataset.json` has 20+ examples and each entry contains `instruction`, `input`, and `output` keys.
+  - `test_adapted_agent_greeting_filter` — verifies that the greeting filter in `run_adapted_agent()` short-circuits correctly without hitting the RAG pipeline.
+  - `test_llama3_prompt_template` — confirms the `LLAMA3_PROMPT_TEMPLATE` contains required Llama-3 special tokens (`<|begin_of_text|>`, `<|start_header_id|>`, `<|eot_id|>`).
 
-### 4. Reproducibility Infrastructure (`reproduce.sh`, `REPRO_AUDIT.md`)
-- Wrote the **one-command reproducibility script** (`reproduce.sh`) that creates an isolated virtual environment, installs pinned dependencies, sets determinism environment variables, runs the full test suite, and generates `run_manifest.json`.
-- Authored `REPRO_AUDIT.md` — a comprehensive audit checklist covering dependency pinning, randomness control, configuration management, credential security, automated verification, and logging/artifact outputs.
-- Created `.env.example` with placeholder values for all required environment variables.
-- Configured `.gitignore` to track result files in `artifacts/` while excluding auto-generated files (`run_manifest.json`) and sensitive credentials (`.env`).
+### 4. Environment & Dependency Documentation
+- Updated `requirements.txt` with all Lab 8 dependencies (python-docx, requests, etc.).
+- Updated `RUN.md` with step-by-step instructions for setting up the adapted agent pipeline:
+  - How to get the Ngrok URL from Colab.
+  - How to set `COLAB_API_URL` in `.env`.
+  - How to switch between agents in the Streamlit UI.
+
+---
+
+## Previous Lab Contributions (Labs 1–7)
+- Designed and implemented the centralized configuration module (`config.py`) with seeded RNG, deterministic UUIDs, and HYPERPARAMS dictionary.
+- Built structured logging framework (`lexguard_logger.py`) with dual output and run manifest generation.
+- Authored all 11 smoke tests in `tests/test_smoke.py` covering the full pipeline without external API dependencies.
+- Wrote `reproduce.sh` and `REPRO_AUDIT.md` for one-command pipeline reproducibility.
 
 ---
 
@@ -45,6 +46,11 @@
 
 ---
 
+## AI Tools Used
+- **Antigravity (Google DeepMind)**: Used to design the Lab 8 smoke test cases and identify which non-determinism boundaries needed explicit documentation in `REPRO_AUDIT.md`.
+
+---
+
 ## Technical Reflection
 
-The core challenge in reproducibility engineering was handling the tension between determinism and real-world variability. LLM API responses are inherently non-deterministic even at low temperatures, OCR output varies across Tesseract versions, and Snowflake queries depend on mutable cloud state. My approach was to draw a clear boundary: everything *within our control* (seeds, UUIDs, file ordering, JSON serialization with `sort_keys=True`) is made fully deterministic, while external non-determinism (LLM responses, OCR engine versions) is explicitly documented as a known limitation in `REPRO_AUDIT.md`. The most satisfying test to write was `test_local_store_determinism`, which proves that two completely independent pipeline runs — from PDF parsing through chunk extraction to JSON storage — produce mathematically identical outputs when given the same seed, after stripping wall-clock timestamps.
+Lab 8 introduced a fundamentally new category of non-determinism: **model training non-determinism**. In previous labs, our reproducibility guarantees covered data processing (ingestion, chunking, UUID generation) and retrieval (keyword search, JSON serialization). But fine-tuning a neural network on a GPU introduces floating-point precision non-determinism that cannot be fully controlled — even with `seed=3407` and cuDNN deterministic mode, different GPU hardware (A100 vs T4) may produce slightly different loss curves and therefore slightly different adapter weights. My approach was to accept this as a documented limitation: in `REPRO_AUDIT.md`, I formally defined the reproducibility guarantee as "identical results given the same HuggingFace Hub adapter checkpoint" rather than "identical results given the same training run," which is a more honest and useful contract for a production system.

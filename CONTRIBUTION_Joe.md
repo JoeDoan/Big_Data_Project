@@ -1,32 +1,39 @@
-# Individual Contribution Report
+# Individual Contribution Report — Lab 8
 **Name:** Joe Doan
-**Role:** Data Pipeline & Ingestion Engineer
+**Role:** Data Pipeline Engineer & Domain Adaptation Lead
 
 ---
 
-## Personal Responsibilities & Implemented Components
+## Lab 8 Contributions
 
-### 1. PDF Ingestion Pipeline (`ingest.py`)
-- Built the complete **end-to-end data ingestion pipeline** that reads PDF contracts from `./data/`, extracts text page-by-page using PyMuPDF (`fitz`), and uploads structured chunks to Snowflake's `CONTRACT_CHUNKS` table.
-- Implemented the **OCR fallback pipeline** for scanned or image-heavy pages: when PyMuPDF text extraction yields fewer than `MIN_TEXT_CHARS` (50) characters, the pipeline falls back to `pdf2image` + `pytesseract` at 300 DPI for accurate optical character recognition.
-- Designed the **chunk data schema** with five fields (`CHUNK_ID`, `DOC_NAME`, `CHUNK_TEXT`, `METADATA`, `UPLOAD_TIMESTAMP`) that serves as the single source of truth for both Snowflake and the local store.
-- Integrated **deterministic UUID generation** via `config.get_seeded_uuid()` to replace `uuid.uuid4()`, ensuring identical chunk IDs across repeated pipeline runs when processing the same documents in the same order.
-- Implemented the `discover_pdfs()` utility to recursively discover `.pdf` and `.PDF` files in any directory, with a sorted output for deterministic processing order.
-- Wrote the `clean_text()` function used across the entire pipeline for whitespace normalization — collapsing multiple spaces, tabs, and newlines into single spaces.
+### 1. Instruction Dataset Generation (`generate_dataset.py`)
+- Designed and implemented the **instruction dataset pipeline** using the Gemini API to generate 50 high-quality training examples from the CUAD contract corpus.
+- Each example follows the required Lab 8 format with `instruction`, `input`, and `output` fields, producing verbose, step-by-step legal reasoning outputs suitable for fine-tuning.
+- Implemented batch processing with automatic retry logic and rate-limiting to handle the Gemini API quota constraints.
+- Saved the final dataset as `instruction_dataset.json` (239 KB, 50 examples).
 
-### 2. Snowflake Upload & Schema Management
-- Implemented `get_snowflake_connection()` with full auto-provisioning: automatically creates the database, schema, and table (`CREATE IF NOT EXISTS`) before each upload, eliminating manual DDL setup.
-- Integrated Snowflake's `write_pandas()` for efficient bulk upload — the function handles parquet staging and `COPY INTO` commands under the hood.
-- Added **runtime MFA prompting** (`input()` for TOTP code) to support Snowflake's Multi-Factor Authentication requirement without storing temporary codes in `.env` files.
-- Implemented error handling that catches `ProgrammingError` exceptions and provides actionable diagnostic messages (warehouse existence, role permissions).
+### 2. Domain-Adapted Agent Pipeline (`adapted_agent.py`)
+- Designed and implemented the **full PEFT inference pipeline** that integrates the fine-tuned Llama-3 adapter with the local RAG store:
+  - `LLAMA3_PROMPT_TEMPLATE`: Correct Llama-3 special token formatting (`<|begin_of_text|>`, `<|start_header_id|>`, `<|eot_id|>`) for proper instruction following.
+  - `query_colab_api()`: HTTP client function that sends formatted prompts to the Colab-hosted FastAPI server via Ngrok tunnel, with robust response parsing to extract only the model's generated answer.
+  - `run_adapted_agent()`: Full RAG-to-model-to-risk-assessment pipeline with greeting filtering to prevent unnecessary API calls.
+- Debugged the critical **prompt format mismatch bug**: the Llama-3 adapter was receiving Mistral `[INST]` tags, causing an infinite generation loop. Fixed by implementing the correct Llama-3 header token format.
+- Implemented robust **response parsing** by identifying that Unsloth's tokenizer renders special tokens as plain text (e.g., `{user_query}assistant\n{answer}`), and splitting on `"assistant\n"` to extract only the generated answer.
 
-### 3. Dual-Write Architecture
-- After the HyperGraphRAG analysis, extended the ingestion pipeline to **dual-write**: chunks are persisted to both the `LocalStore` (offline JSON files) and Snowflake (cloud warehouse), ensuring the system works in both online and offline modes.
-- Added `LocalStore` initialization and ingestion calls at lines 303–306 of `ingest.py`, triggered after chunk extraction and before Snowflake upload.
+### 3. FastAPI Colab Server Configuration
+- Configured the **Google Colab inference server** (`GenerateRequest` schema, `generate()` endpoint) to correctly accept and process generation parameters without deadlocking the GPU.
+- Diagnosed and fixed the Llama-3 GPU deadlock caused by incorrect input format, implementing `torch.inference_mode()` and explicit `pad_token_id` to stabilize generation.
 
-### 4. Data Directory & Contracts
-- Curated and organized the 6 contract PDFs in `./data/`, sourced from public SEC filings and the CUAD dataset, covering diverse agreement types: co-branding, endorsement, manufacturing, servicing, and supply agreements.
-- Verified that all PDFs are parseable by PyMuPDF and produce meaningful text extraction results across all pages.
+### 4. Lab 8 Evaluation (`run_evaluation.py`, `EVALUATION.md`)
+- Wrote the `run_evaluation.py` script that ran both agents on all 10 queries live and recorded timing and answer-rate metrics.
+- Authored `EVALUATION.md` with a full comparison table, summary metrics, and analysis of the baseline vs. adapted system trade-offs.
+
+---
+
+## Previous Lab Contributions (Labs 1–7)
+- Built `ingest.py`: complete PDF → Snowflake ingestion pipeline with OCR fallback, dual-write to `LocalStore`, and deterministic UUID chunk IDs.
+- Curated and organized the 6 contract PDFs in `./data/` from public SEC/CUAD sources.
+- Implemented `get_snowflake_connection()` with auto-provisioning (CREATE IF NOT EXISTS) and MFA support.
 
 ---
 
@@ -36,6 +43,12 @@
 
 ---
 
+## AI Tools Used
+- **Antigravity (Google DeepMind)**: Used to debug the Llama-3 prompt formatting bug, identify the exact Unsloth tokenizer output format via live API testing, and generate the `EVALUATION.md` report.
+- **Gemini API**: Used to generate the `instruction_dataset.json` training examples.
+
+---
+
 ## Technical Reflection
 
-The most significant engineering challenge was handling the diversity of PDF formats in real-world legal contracts. Some documents are natively digital with clean text layers, while others are scanned images requiring OCR. The two-tier extraction approach (PyMuPDF native → pytesseract fallback) reliably handles both cases, but I learned that OCR accuracy varies significantly between Tesseract versions (4.x vs 5.x) — a reproducibility concern we documented in `REPRO_AUDIT.md`. The dual-write architecture was inspired by studying HyperGraphRAG's storage separation pattern: writing to both a local JSON store and Snowflake ensures the system degrades gracefully when cloud connectivity is unavailable, which proved essential during development and testing cycles.
+The most difficult challenge in Lab 8 was debugging an invisible GPU deadlock: the Llama-3 model would accept requests but hang indefinitely, producing no output or error. By writing a minimal test script (`test_colab.py`) that sent a single `repr()`-printed request and reading the raw bytes of the tokenizer's output, I discovered that Unsloth renders Llama-3's special tokens (`<|start_header_id|>assistant<|end_header_id|>`) as plain text without surrounding newlines: `...{query}assistant\n{answer}`. This required a very precise string split rather than a regex, and taught me that low-level tokenizer behavior often contradicts higher-level documentation.
