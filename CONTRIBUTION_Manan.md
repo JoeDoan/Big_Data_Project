@@ -1,4 +1,4 @@
-# Individual Contribution Report — Lab 8
+# Individual Contribution Report — Labs 8 & 9
 **Name:** Manan Koradiya
 **Role:** Agent Architect & System Integrator
 
@@ -24,6 +24,31 @@
 
 ---
 
+## Lab 9 Contributions
+
+### 1. Complete Streamlit UI Redesign (`app.py`)
+- Rewrote `app.py` from scratch with a **premium dark theme** featuring:
+  - Custom CSS with glassmorphism cards, gradient borders, and hover animations
+  - Inter font from Google Fonts for modern typography
+  - Animated gradient header ("⚖️ LexGuard") using CSS `background-clip: text`
+  - Color-coded risk badges: 🟢 Low (green), 🟡 Medium (amber), 🔴 High (red)
+  - Per-response latency tags showing execution time inline
+
+### 2. Query History Sidebar
+- Implemented a **clickable query history panel** in the sidebar that shows the last 10 queries with their latency and risk level, giving users a quick overview of their session.
+
+### 3. Execution Trace & Reasoning Panels
+- Built **collapsible "🔍 Execution Trace & Debug Log" expanders** under each assistant response, visualizing the step-by-step reasoning process:
+  - `📝 Query Received` → `🛠️ Tool Call` → `🤖 Model Inference` → `✅ Response Generated`
+  - Each step shows timing and result previews with styled trace blocks.
+
+### 4. Error Handling & System Status (Area D)
+- Wrapped all agent calls in `try/except` blocks with user-friendly error messages instead of raw stack traces.
+- Added a **System Status panel** in the sidebar showing live connectivity indicators for Gemini API, Snowflake DB, and Colab PEFT Server.
+- Implemented wide layout mode for better content utilization.
+
+---
+
 ## Previous Lab Contributions (Labs 1–7)
 - Designed and implemented the agentic reasoning loop in `agent.py` using the Gemini 2.5 Flash SDK.
 - Authored the system prompt defining LexGuard's "Recall-Then-Reason" pipeline with max-steps guard and tool dispatch mechanism.
@@ -39,10 +64,10 @@
 ---
 
 ## AI Tools Used
-- **Antigravity (Google DeepMind)**: Used to implement the RAG fallback logic in `tools.py` and to debug the Streamlit toggle integration between both agents.
+- **Antigravity (Google DeepMind)**: Used to implement the RAG fallback logic in `tools.py` (Lab 8) and to build the premium dark-theme Streamlit UI with glassmorphism CSS and execution trace panels (Lab 9).
 
 ---
 
 ## Technical Reflection
 
-The key challenge in Lab 8 integration was maintaining backward compatibility between the original Gemini-based agent and the new adapted Llama-3 pipeline. Both agents share the same `tools.py` infrastructure, but use different retrieval backends (Snowflake vs. local JSON store). The main design decision was to make `retrieve_local_clauses()` and `retrieve_contract_clauses()` return identically-formatted strings, so that the downstream risk assessment and UI display code could remain unchanged. The multi-tier RAG fallback in `tools.py` was critical for the adapted agent's answer quality — without it, many legal queries would return zero results from the keyword index, since the index only covers 20 pre-defined legal terms.
+In Lab 9, the core UI challenge was making the execution traces readable without cluttering the chat interface. The solution was Streamlit's `st.expander()`, which hides the debug panel by default but makes it instantly accessible. The CSS glassmorphism effect (`backdrop-filter: blur(12px)` + semi-transparent backgrounds) creates visual depth that separates the sidebar analytics from the main chat area, making the interface feel professional rather than overwhelming despite showing a lot of real-time data.

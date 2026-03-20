@@ -1,12 +1,18 @@
-venv/
-__pycache__/
-.DS_Store
+# Environment
 .env
-artifacts/run_manifest.json
-artifacts/.gitkeep
-logs/*.log
-logs/*.json
-!logs/.gitkeep
+
+# Python
+__pycache__/
 *.pyc
-.pytest_cache/
-tests/fixtures/*.pdf
+*.pyo
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Logs & output
+logs/
+*.log

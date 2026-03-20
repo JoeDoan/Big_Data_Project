@@ -1,4 +1,4 @@
-# Individual Contribution Report — Lab 8
+# Individual Contribution Report — Labs 8 & 9
 **Name:** Ruixuan Hou
 **Role:** Reproducibility & Testing Lead
 
@@ -32,6 +32,32 @@
 
 ---
 
+## Lab 9 Contributions
+
+### 1. Dependency Management (`requirements.txt`)
+- Rewrote `requirements.txt` with **pinned minimum versions** for all production dependencies: `streamlit>=1.30.0`, `google-genai>=1.0.0`, `snowflake-connector-python>=3.6.0`, etc.
+- Organized dependencies into a clean list ensuring reproducible installs across team members and deployment environments.
+
+### 2. Streamlit Configuration (`.streamlit/config.toml`)
+- Created `.streamlit/config.toml` with a **custom dark purple theme** (`primaryColor=#7C3AED`, `backgroundColor=#0F172A`, `secondaryBackgroundColor=#1E293B`) that matches the glassmorphism CSS in `app.py`.
+- Configured headless server mode for deployment and disabled usage stats collection.
+
+### 3. Docker Deployment (`Dockerfile`)
+- Authored a **production Dockerfile** using `python:3.12-slim` base image:
+  - Installs system build dependencies, then Python packages from `requirements.txt`.
+  - Copies application code, exposes port 8501.
+  - Includes a `HEALTHCHECK` command that verifies the Streamlit server is responsive.
+  - Configurable via `--env-file .env` at runtime for API key injection.
+- Documented build/run commands in `LAB9_REPORT.md`.
+
+### 4. System Status Panel
+- Contributed the **system status indicator panel** in the sidebar that checks environment variables to determine connectivity status:
+  - 🟢 Online: Gemini API key and Snowflake credentials detected
+  - 🟡 Unknown: Colab URL set but connectivity unverified
+  - 🔴 Offline: Missing credentials
+
+---
+
 ## Previous Lab Contributions (Labs 1–7)
 - Designed and implemented the centralized configuration module (`config.py`) with seeded RNG, deterministic UUIDs, and HYPERPARAMS dictionary.
 - Built structured logging framework (`lexguard_logger.py`) with dual output and run manifest generation.
@@ -47,10 +73,10 @@
 ---
 
 ## AI Tools Used
-- **Antigravity (Google DeepMind)**: Used to design the Lab 8 smoke test cases and identify which non-determinism boundaries needed explicit documentation in `REPRO_AUDIT.md`.
+- **Antigravity (Google DeepMind)**: Used to design Lab 8 smoke test cases (Lab 8), and to create the Dockerfile, Streamlit theme configuration, and dependency management files (Lab 9).
 
 ---
 
 ## Technical Reflection
 
-Lab 8 introduced a fundamentally new category of non-determinism: **model training non-determinism**. In previous labs, our reproducibility guarantees covered data processing (ingestion, chunking, UUID generation) and retrieval (keyword search, JSON serialization). But fine-tuning a neural network on a GPU introduces floating-point precision non-determinism that cannot be fully controlled — even with `seed=3407` and cuDNN deterministic mode, different GPU hardware (A100 vs T4) may produce slightly different loss curves and therefore slightly different adapter weights. My approach was to accept this as a documented limitation: in `REPRO_AUDIT.md`, I formally defined the reproducibility guarantee as "identical results given the same HuggingFace Hub adapter checkpoint" rather than "identical results given the same training run," which is a more honest and useful contract for a production system.
+Lab 9's deployment work revealed an important tension between reproducibility and flexibility. The `requirements.txt` uses `>=` version pins rather than `==` exact pins — this is intentional. Exact pins would guarantee byte-identical installs but would break on different Python versions or platforms (e.g., `snowflake-connector-python` has different wheels for macOS ARM vs Linux x86). The `>=` approach ensures the code works on the widest range of deployment targets (Streamlit Cloud, Docker, Colab, local Mac) while the Dockerfile provides an exact-reproduction path when needed. The `.streamlit/config.toml` theme coordination with the CSS in `app.py` was also non-trivial — Streamlit applies its theme to native widgets (radio buttons, metrics, expanders) but not to custom HTML, so both systems need to use the same color palette to avoid visual mismatches.

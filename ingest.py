@@ -205,7 +205,6 @@ def get_snowflake_connection() -> snowflake.connector.SnowflakeConnection:
         account=SNOW_ACCOUNT,
         user=SNOW_USER,
         password=SNOW_PASS,
-        passcode=_mfa_passcode,
         insecure_mode=True,  # Bypass OCSP certificate validation issues
     )
 
@@ -218,9 +217,9 @@ def get_snowflake_connection() -> snowflake.connector.SnowflakeConnection:
             cur.execute(f"USE ROLE {snow_role}")
 
         cur.execute(f"USE WAREHOUSE {SNOW_WH}")
-        cur.execute(f"CREATE DATABASE IF NOT EXISTS {SNOW_DB}")
+        # cur.execute(f"CREATE DATABASE IF NOT EXISTS {SNOW_DB}")
         cur.execute(f"USE DATABASE {SNOW_DB}")
-        cur.execute(f"CREATE SCHEMA IF NOT EXISTS {SNOW_SCHEMA}")
+        # cur.execute(f"CREATE SCHEMA IF NOT EXISTS {SNOW_SCHEMA}")
         cur.execute(f"USE SCHEMA {SNOW_SCHEMA}")
         cur.execute(f"""
             CREATE TABLE IF NOT EXISTS {TARGET_TABLE} (
@@ -244,10 +243,6 @@ def get_snowflake_connection() -> snowflake.connector.SnowflakeConnection:
         cur.close()
 
     return conn
-
-
-# Will be set at runtime if MFA is needed
-_mfa_passcode: str | None = None
 
 
 def upload_to_snowflake(df: pd.DataFrame) -> None:
@@ -311,12 +306,6 @@ def main() -> None:
     print(df.head(3).to_string(index=False, max_colwidth=60))
 
     # 4. Upload to Snowflake
-    #    Prompt for MFA/TOTP code (changes every 30s, so can't go in .env)
-    global _mfa_passcode
-    totp = input("\n🔐 Enter your Snowflake MFA/TOTP code (6 digits): ").strip()
-    if totp:
-        _mfa_passcode = totp
-
     upload_to_snowflake(df)
 
     print("\n🎉 Ingestion pipeline finished successfully!\n")

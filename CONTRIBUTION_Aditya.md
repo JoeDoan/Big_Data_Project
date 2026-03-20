@@ -1,4 +1,4 @@
-# Individual Contribution Report — Lab 8
+# Individual Contribution Report — Labs 8 & 9
 **Name:** Aditya Naredla
 **Role:** Storage Architect & Evaluation Engineer
 
@@ -28,6 +28,28 @@
 
 ---
 
+## Lab 9 Contributions
+
+### 1. Monitoring Module (`monitor.py`)
+- Designed and implemented the **`QueryMetrics` dataclass** capturing per-query performance data: query text, pipeline used, start/end time, latency, tool calls list, tool count, retrieval count, risk level, success/failure status, and error message.
+- Built the **`MetricsCollector` class** that accumulates metrics across a Streamlit session, providing aggregate statistics:
+  - `total_queries()`, `avg_latency()`, `success_rate()`
+  - `pipeline_breakdown()` — count of queries per pipeline
+  - `tool_usage_breakdown()` — count of each tool invoked across all queries
+  - `avg_latency_by_pipeline()` — per-pipeline average response time for comparison
+
+### 2. Live Analytics Dashboard (`app.py` sidebar)
+- Integrated `MetricsCollector` with the Streamlit sidebar to display a **real-time analytics panel** that appears after the first query:
+  - Session-level metrics: total queries, average latency, success rate
+  - Pipeline usage progress bars with per-pipeline breakdown
+  - Per-pipeline average latency comparison badges
+  - Tool call frequency breakdown showing which tools are most used
+
+### 3. Per-Response Latency Badges
+- Implemented inline **latency tags** (`⏱ X.Xs`) and **risk level badges** displayed under each assistant message, providing immediate feedback on system performance without expanding the debug panel.
+
+---
+
 ## Previous Lab Contributions (Labs 1–7)
 - Designed and implemented `LocalStore` class (241 LOC): a three-namespace JSON storage engine (`kv_store_documents.json`, `kv_store_chunks.json`, `kv_store_clause_index.json`).
 - Conducted HyperGraphRAG reproduction attempt and documented findings in `RELATED_WORK_REPRO.md`.
@@ -43,11 +65,11 @@
 ---
 
 ## AI Tools Used
-- **Antigravity (Google DeepMind)**: Used to generate the PEFT training notebook structure and debug the QLoRA configuration for Llama-3 on Colab T4 GPU.
+- **Antigravity (Google DeepMind)**: Used to generate the PEFT training notebook structure (Lab 8) and to design the `monitor.py` monitoring module architecture and analytics dashboard integration (Lab 9).
 - **Gemini API**: Used to generate verbose, explanation-rich outputs for the instruction dataset.
 
 ---
 
 ## Technical Reflection
 
-The biggest insight from Lab 8 was discovering the "hardware ceiling" effect in fine-tuning: with only 50 examples and 60 training steps, the model doesn't truly learn new legal knowledge — it learns the *format* of legal reasoning. The pre-trained Llama-3 base already contains enough legal knowledge from its training corpus; what PEFT adds is the structural habit of answering in a "Summary → Step-by-Step → Citation" format that matches legal audit best practices. This is why both agents achieved 100% answer rate — the adapted model's advantage is not coverage, but structured presentation quality, which is exactly what domain adaptation theory predicts.
+Lab 9's monitoring challenge was deciding what to track without adding overhead. The `QueryMetrics` dataclass uses Python's `time.time()` for microsecond-precision latency measurement — cheap enough to run on every query. The key design decision was storing metrics in `st.session_state` rather than writing to disk, which makes the analytics dashboard zero-latency (no file I/O) and ensures metrics don't persist across sessions (avoiding stale data from different deployment contexts). The per-pipeline comparison feature directly extends the Lab 8 evaluation work: instead of running offline batch evaluations, users can now see baseline vs. adapted performance differences live in the sidebar.

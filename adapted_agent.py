@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 import json
 import logging
@@ -57,15 +58,12 @@ def query_colab_api(formatted_prompt: str) -> str:
         if "response" in result:
             raw_text = result["response"]
             # Parse ONLY the model's generated answer.
-            # Unsloth renders Llama-3 headers as plain text with NO newline before 'assistant':
-            # e.g. '...User Query: what?assistant\nHere is the answer.'
-            # So we simply split on 'assistant\n' and take the LAST part.
             import re
             if "assistant\n" in raw_text:
                 clean_text = raw_text.split("assistant\n")[-1].strip()
                 clean_text = clean_text.replace("<|eot_id|>", "").strip()
                 return clean_text
-            # Fallback: Llama-3 raw special tokens (if skip_special_tokens=False in Colab)
+            # Fallback: Llama-3 raw special tokens
             if "<|start_header_id|>assistant<|end_header_id|>" in raw_text:
                 clean_text = raw_text.split("<|start_header_id|>assistant<|end_header_id|>")[-1].strip()
                 return clean_text.replace("<|eot_id|>", "").strip()
@@ -87,28 +85,56 @@ def query_colab_api(formatted_prompt: str) -> str:
         return f"API Error: {str(e)}"
 
 # 2. The Execution Loop (Adapted for PEFT Pipeline)
-def run_adapted_agent(user_query: str) -> str:
+def run_adapted_agent(user_query: str) -> dict:
     """
     Runs the LexGuard pipeline using the Fine-Tuned Local Server.
     Step 1: RAG Retrieval
     Step 2: Model Extraction 
     Step 3: Python Rule Risk Calculation
+
+    Returns:
+        dict with keys: response (str), trace (list[dict]), tool_calls (list[str]),
+                        retrieval_count (int), risk_level (str), success (bool)
     """
+    trace = []
+    tool_names = []
+    retrieval_count = 0
+    risk_level = "N/A"
+
     print(f"\n🧠 [ADAPTED MODEL] LexGuard starting audit for query: '{user_query}'")
+    trace.append({"step": "start", "detail": f"Query: {user_query}"})
     
     # STEP 0: Filter out greetings and non-contract queries
     greeting_words = {'hi', 'hello', 'hey', 'sup', 'yo', 'greetings', 'howdy', 'good morning', 'good afternoon', 'good evening'}
     query_lower = user_query.strip().lower().rstrip('!?.,')
     if query_lower in greeting_words or len(query_lower.split()) <= 2 and not any(w in query_lower for w in ['contract', 'clause', 'liability', 'risk', 'term', 'party', 'parties', 'agreement', 'lease', 'indemnif']):
-        return "👋 Hello! I'm LexGuard, your AI Contract Compliance Auditor. Ask me a question about your contracts, such as:\n\n• *What are the termination conditions?*\n• *Is there any uncapped liability?*\n• *Who are the parties in the agreements?*"
+        greeting_msg = "👋 Hello! I'm LexGuard, your AI Contract Compliance Auditor. Ask me a question about your contracts, such as:\n\n• *What are the termination conditions?*\n• *Is there any uncapped liability?*\n• *Who are the parties in the agreements?*"
+        trace.append({"step": "greeting_filter", "detail": "Non-contract query detected", "time": 0})
+        return {"response": greeting_msg, "trace": trace, "tool_calls": [], 
+                "retrieval_count": 0, "risk_level": "N/A", "success": True}
     
     # STEP 1: RAG Retrieval
-    # We will pass the full query to the semantic search store because it uses embeddings 
-    # to find the conceptual match, which is more robust than naive keyword slicing.
+    rag_start = time.time()
     retrieved_context = retrieve_local_clauses(user_query)
+    rag_elapsed = round(time.time() - rag_start, 2)
+    tool_names.append("retrieve_local_clauses")
+    
+    if retrieved_context:
+        retrieval_count = retrieved_context.count("[Source:")
+    
+    trace.append({
+        "step": "tool_call",
+        "tool": "retrieve_local_clauses",
+        "args": user_query,
+        "result_preview": retrieved_context[:150] if retrieved_context else "(empty)",
+        "time": rag_elapsed
+    })
     
     if not retrieved_context.strip() or "No evidence found" in retrieved_context:
-        return f"Could not find any clauses related to your query to analyze. Please try a different query."
+        no_result_msg = "Could not find any clauses related to your query to analyze. Please try a different query."
+        trace.append({"step": "no_results", "detail": "RAG retrieval returned empty", "time": 0})
+        return {"response": no_result_msg, "trace": trace, "tool_calls": tool_names,
+                "retrieval_count": 0, "risk_level": "N/A", "success": False}
         
     # STEP 2: Model Extraction
     formatted_prompt = LLAMA3_PROMPT_TEMPLATE.format(
@@ -117,23 +143,55 @@ def run_adapted_agent(user_query: str) -> str:
     )
     
     print(f"🤖 Sending retrieved context to Colab Ngrok Server ({COLAB_API_URL})...")
+    model_start = time.time()
     model_extraction = query_colab_api(formatted_prompt)
+    model_elapsed = round(time.time() - model_start, 2)
+    
+    trace.append({
+        "step": "model_inference",
+        "tool": "colab_peft_api",
+        "detail": f"Sent to {COLAB_API_URL}",
+        "result_preview": model_extraction[:150],
+        "time": model_elapsed
+    })
     
     if "Error" in model_extraction or "⏳" in model_extraction:
-        return model_extraction
+        trace.append({"step": "error", "detail": model_extraction, "time": 0})
+        return {"response": model_extraction, "trace": trace, "tool_calls": tool_names,
+                "retrieval_count": retrieval_count, "risk_level": "N/A", "success": False}
         
     # STEP 3: Python Rule Risk Calculation
     print(f"⚖️ Running extracted facts through `calculate_risk_level` rules...")
+    risk_start = time.time()
     risk_assessment = calculate_risk_level(model_extraction)
+    risk_elapsed = round(time.time() - risk_start, 2)
+    tool_names.append("calculate_risk_level")
+    
+    if "High Risk" in risk_assessment:
+        risk_level = "High"
+    elif "Medium Risk" in risk_assessment:
+        risk_level = "Medium"
+    else:
+        risk_level = "Low"
+    
+    trace.append({
+        "step": "tool_call",
+        "tool": "calculate_risk_level",
+        "result_preview": risk_assessment[:150],
+        "time": risk_elapsed
+    })
     
     print("\n✅ Final Verdict Reached.")
+    trace.append({"step": "response", "detail": "Final verdict generated", "time": 0})
     
     # Combine the model's extraction and the python risk assessment
     final_output = f"**Model Extraction:**\n{model_extraction}\n\n**Rule-Based Risk Assessment:**\n{risk_assessment}"
-    return final_output
+    return {"response": final_output, "trace": trace, "tool_calls": tool_names,
+            "retrieval_count": retrieval_count, "risk_level": risk_level, "success": True}
 
 
 if __name__ == "__main__":
     test_query = "Audit the lease agreements to see if the pet deposit amount is compliant."
-    final_output = run_adapted_agent(test_query)
-    print(f"\n[FINAL OUTPUT]\n{final_output}")
+    result = run_adapted_agent(test_query)
+    print(f"\n[FINAL OUTPUT]\n{result['response']}")
+    print(f"\n[TRACE]\n{result['trace']}")

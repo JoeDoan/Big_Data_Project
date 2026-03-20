@@ -1,32 +1,13 @@
-# --- Core Data & Machine Learning ---
-pandas==2.3.3
-numpy==2.4.2
-scikit-learn==1.8.0
+# LexGuard — Python Dependencies
+# Install: pip install -r requirements.txt
 
-# --- Document Processing & OCR ---
-pymupdf==1.27.1
-pytesseract==0.3.13
-pdf2image==1.17.0
-Pillow==11.0.0
-
-# --- Retrieval & Vector DBs ---
-transformers==5.2.0
-datasets==4.6.0
-sentence-transformers==5.2.3
-faiss-cpu==1.13.2
-chromadb==1.5.1
-rank-bm25==0.2.2
-
-# --- Cloud Database & Generative AI ---
-snowflake-connector-python[pandas]==3.12.3
-google-genai==1.65.0
-groq==0.25.0
-streamlit==1.54.0
-
-# --- Utilities ---
-tqdm==4.67.3
-python-dotenv==1.2.1
-
-# --- Testing ---
-pytest==8.4.0
-fpdf2==2.8.3
+streamlit>=1.30.0
+google-genai>=1.0.0
+python-dotenv>=1.0.0
+snowflake-connector-python>=3.6.0
+requests>=2.31.0
+numpy>=1.24.0
+pandas>=2.0.0
+PyMuPDF>=1.23.0
+tqdm>=4.65.0
+pytest>=7.4.0
