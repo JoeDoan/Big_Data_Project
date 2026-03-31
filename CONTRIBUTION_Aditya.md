@@ -1,30 +1,22 @@
-# Individual Contribution Report — Labs 8 & 9
+# Individual Contribution Report — Labs 1–9 (Through Phase 3)
 **Name:** Aditya Naredla
 **Role:** Storage Architect & Evaluation Engineer
 
 ---
 
-## Lab 8 Contributions
+## Phase 3 Contributions
 
-### 1. Domain Task Definition & Model Selection
-- Led the team discussion to define the **domain reasoning task**: legal contract risk classification using the CUAD dataset, selecting clause-level risk analysis (High/Medium/Low) as the specific instruction tuning objective.
-- Researched and selected **Llama-3 8B** as the base model for PEFT fine-tuning over alternatives (Mistral-7B, Phi-3), based on its improved instruction-following capability and legal reasoning benchmark performance.
-- Justified the model choice in the group report: Llama-3's chat template uses distinct role headers (`<|start_header_id|>system/user/assistant<|end_header_id|>`) that align well with structured legal audit prompts.
+### 1. Evaluation Support & Hybrid Search Benchmarking
+- Supported the hybrid search retrieval evaluation by providing the `LocalStore` infrastructure used in `evaluate_hybrid.py` for testing 5 different configurations (varying embedding models, top-K, and query expansion).
+- Maintained the `local_store.py` module that powers the hybrid search fallback path (FAISS dense search + BM25 sparse search + cross-encoder reranking).
 
-### 2. PEFT Training Notebook (`LexGuard_PEFT_Training.ipynb`)
-- Authored the **Google Colab training notebook** using Unsloth + QLoRA (LoRA rank=16, lora_alpha=16), fine-tuning Llama-3 8B in 4-bit quantization on T4 GPU.
-- Configured the training loop: `SFTTrainer` with 60 steps, batch size=2, gradient accumulation=4, learning rate=2e-4, AdamW 8-bit optimizer.
-- Pushed the fine-tuned LoRA adapter to HuggingFace Hub as `doandune/LexGuard-llama3-Risk-Adapter` for team-wide access.
-- Verified training convergence by monitoring the SFT loss curve and confirming the adapter learned legal risk classification format from the 50-example dataset.
+### 2. Monitoring Module Maintenance (`monitor.py`)
+- Continued maintaining the `QueryMetrics` dataclass and `MetricsCollector` class to ensure compatibility with the Phase 3 UI changes (dark/light theme, chat history integration).
+- Analytics dashboard in the sidebar continues to track per-query performance across sessions.
 
-### 3. Evaluation Design & Results (`EVALUATION.md`, `eval_results.json`)
-- Designed the 10-query evaluation set covering diverse legal reasoning tasks: change of control, liability caps, termination conditions, party identification, confidentiality, indemnification, governing law, assignment restrictions, insurance, and payment obligations.
-- Defined evaluation metrics: answer rate (binary), response time, knowledge source, and reasoning style.
-- Produced `EVALUATION.md` documenting the full comparison table and analysis of trade-offs between baseline and adapted systems.
-
-### 4. LocalStore Search Quality (`local_store.py`)
-- Extended the `LocalStore.search_clauses()` method with **phrase-level boosting**: clauses containing multi-word legal phrases (e.g., "change of control", "indemnification") score higher than clauses with isolated keyword matches, improving retrieval precision for the adapted agent.
-- Added score normalization to ensure results are consistent regardless of clause length.
+### 3. Training & Model Evaluation
+- The PEFT-trained Llama-3 adapter (`doandune/LexGuard-llama3-Risk-Adapter`) on HuggingFace Hub remains available for the adapted pipeline comparison.
+- Contributed to the evaluation design that informed the decision to replace BERT with full-document LLM extraction.
 
 ---
 
@@ -32,21 +24,40 @@
 
 ### 1. Monitoring Module (`monitor.py`)
 - Designed and implemented the **`QueryMetrics` dataclass** capturing per-query performance data: query text, pipeline used, start/end time, latency, tool calls list, tool count, retrieval count, risk level, success/failure status, and error message.
-- Built the **`MetricsCollector` class** that accumulates metrics across a Streamlit session, providing aggregate statistics:
+- Built the **`MetricsCollector` class** providing aggregate statistics:
   - `total_queries()`, `avg_latency()`, `success_rate()`
   - `pipeline_breakdown()` — count of queries per pipeline
   - `tool_usage_breakdown()` — count of each tool invoked across all queries
-  - `avg_latency_by_pipeline()` — per-pipeline average response time for comparison
+  - `avg_latency_by_pipeline()` — per-pipeline average response time
 
 ### 2. Live Analytics Dashboard (`app.py` sidebar)
-- Integrated `MetricsCollector` with the Streamlit sidebar to display a **real-time analytics panel** that appears after the first query:
-  - Session-level metrics: total queries, average latency, success rate
-  - Pipeline usage progress bars with per-pipeline breakdown
-  - Per-pipeline average latency comparison badges
-  - Tool call frequency breakdown showing which tools are most used
+- Integrated `MetricsCollector` with the Streamlit sidebar to display a **real-time analytics panel**:
+  - Session-level metrics: total queries, average latency, success rate.
+  - Pipeline usage progress bars with per-pipeline breakdown.
+  - Per-pipeline average latency comparison badges.
+  - Tool call frequency breakdown.
 
 ### 3. Per-Response Latency Badges
-- Implemented inline **latency tags** (`⏱ X.Xs`) and **risk level badges** displayed under each assistant message, providing immediate feedback on system performance without expanding the debug panel.
+- Implemented inline **latency tags** (`⏱ X.Xs`) and **risk level badges** under each assistant message.
+
+---
+
+## Lab 8 Contributions
+
+### 1. Domain Task Definition & Model Selection
+- Led the team discussion to define the **domain reasoning task**: legal contract risk classification using the CUAD dataset.
+- Researched and selected **Llama-3 8B** as the base model for PEFT fine-tuning over alternatives (Mistral-7B, Phi-3).
+
+### 2. PEFT Training Notebook (`LexGuard_PEFT_Training.ipynb`)
+- Authored the **Google Colab training notebook** using Unsloth + QLoRA (LoRA rank=16, lora_alpha=16), fine-tuning Llama-3 8B in 4-bit quantization on T4 GPU.
+- Pushed the fine-tuned LoRA adapter to HuggingFace Hub as `doandune/LexGuard-llama3-Risk-Adapter`.
+
+### 3. Evaluation Design & Results
+- Designed the 10-query evaluation set covering diverse legal reasoning tasks.
+- Defined evaluation metrics: answer rate, response time, knowledge source, and reasoning style.
+
+### 4. LocalStore Search Quality (`local_store.py`)
+- Extended `LocalStore.search_clauses()` with **phrase-level boosting** and score normalization.
 
 ---
 
@@ -65,11 +76,11 @@
 ---
 
 ## AI Tools Used
-- **Antigravity (Google DeepMind)**: Used to generate the PEFT training notebook structure (Lab 8) and to design the `monitor.py` monitoring module architecture and analytics dashboard integration (Lab 9).
+- **Antigravity (Google DeepMind)**: Used to generate the PEFT training notebook structure (Lab 8) and to design the `monitor.py` monitoring module architecture (Lab 9).
 - **Gemini API**: Used to generate verbose, explanation-rich outputs for the instruction dataset.
 
 ---
 
 ## Technical Reflection
 
-Lab 9's monitoring challenge was deciding what to track without adding overhead. The `QueryMetrics` dataclass uses Python's `time.time()` for microsecond-precision latency measurement — cheap enough to run on every query. The key design decision was storing metrics in `st.session_state` rather than writing to disk, which makes the analytics dashboard zero-latency (no file I/O) and ensures metrics don't persist across sessions (avoiding stale data from different deployment contexts). The per-pipeline comparison feature directly extends the Lab 8 evaluation work: instead of running offline batch evaluations, users can now see baseline vs. adapted performance differences live in the sidebar.
+Phase 3's evaluation results validated the monitoring infrastructure built in Lab 9: the `MetricsCollector` provided real-time latency comparisons that helped the team quantify the performance difference between BERT extraction and full-document LLM extraction. The `QueryMetrics` dataclass proved flexible enough to accommodate the new extraction approach without any schema changes — the `tool_calls` field simply captures different tool names (`extract_risk_clauses_llm` vs `extract_clause_with_bert`) while the `latency` and `success` fields remain universal. This confirmed that designing metrics around pipeline-agnostic abstractions rather than specific tool implementations was the right architectural choice.

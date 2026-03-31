@@ -1,8 +1,62 @@
-# Team Contribution Report — Labs 8 & 9
-**Project:** LexGuard — Domain-Adapted Legal Compliance Auditor
-**Lab 8:** Fine-Tuning and Domain Adaptation for GenAI Systems
-**Lab 9:** Application and Deployment Enhancement
-**Deadline:** March 20, 2026
+# Team Contribution Report — Labs 1–9 (Through Phase 3)
+**Project:** LexGuard — Neuro-Symbolic Compliance Auditor for Contract Risk Analysis
+**Course:** CS 5542 — Big Data Analytics & Applications, UMKC, Spring 2026
+**GitHub:** https://github.com/JoeDoan/Lab9_BigData
+
+---
+
+## Phase 3 — Team Contribution Table
+
+| Team Member | Role | Phase 3 Contributions | % |
+|---|---|---|---|
+| **Joe Doan** | Data Pipeline & Adaptation Lead | BERT vs LLM evaluation (`evaluate_e2e.py`), full-doc LLM extraction pipeline (`extract_risk_clauses_llm`, `extract_contract_brief`), Snowflake chat persistence (`chat_history.py`), dark/light theme toggle, chat history UI with delete & LLM-generated titles, Phase 3 report | 30% |
+| **Manan Koradiya** | Agent Architect & Integrator | `app.py` UI redesign (glassmorphism CSS, chat interface), RAG fallback enhancement (`tools.py`), end-to-end system integration, reasoning panels and query history sidebar | 25% |
+| **Aditya Naredla** | Storage & Evaluation Engineer | PEFT training notebook (`LexGuard_PEFT_Training.ipynb`), `monitor.py` module, live analytics dashboard, HuggingFace Hub adapter upload | 25% |
+| **Ruixuan Hou** | Reproducibility Lead | `requirements.txt`, `Dockerfile`, `.streamlit/config.toml`, `reproduce.sh`, `REPRO_AUDIT.md`, `RUN.md` setup instructions, system status panel | 20% |
+| **Total** | | | **100%** |
+
+---
+
+## Phase 3 — Key Technical Decisions
+
+### 1. BERT → Full-Document LLM Extraction
+- Fine-tuned BERT QA model (`doandune/LexGuard-CUAD-BERT`) achieved only **53.8% accuracy with ~0% recall** on 12 risk clause types.
+- Root cause: BERT's 512-token window misses clauses spanning multiple paragraphs.
+- **Decision:** Replaced with Gemini 2.5 Flash full-document extraction (**86.3% accuracy**), passing up to 200K characters directly to the LLM.
+
+### 2. Chunking + RAG → Direct Full-Document Input
+- Evaluated hybrid retrieval (FAISS + BM25 + cross-encoder reranking) with document chunking.
+- Chunking fragmented important clause context, lowering extraction accuracy.
+- **Decision:** Production pipeline now feeds the entire document directly to Gemini, leveraging its 1M-token context window.
+
+### 3. Snowflake Chat Persistence
+- Added `CHAT_SESSIONS` and `CHAT_MESSAGES` tables with annotation metadata serialization (JSON).
+- LLM-generated session titles, delete functionality, and full session restore including expandable source annotations.
+
+---
+
+## System Architecture (Phase 3 Production)
+
+```
+User (Streamlit UI — Dark/Light Theme)
+        ↓
+  [File Upload: PDF/TXT]
+        ↓
+  PyMuPDF Text Extraction (Full Document)
+        ↓
+  ┌─────────────────────────────────────┐
+  │ PRIMARY PATH: Full-Doc LLM         │
+  │   • Risk Audit (200K chars → Gemini)│
+  │   • Metadata Brief (8 entities)     │
+  │   • General Q&A (50K chars)         │
+  └─────────────────────────────────────┘
+        ↓
+  Gemini 2.5 Flash Response
+  + Expandable Source Annotations
+        ↓
+  Snowflake Persistence
+  (CHAT_SESSIONS + CHAT_MESSAGES + METADATA)
+```
 
 ---
 
@@ -15,48 +69,6 @@
 | **Aditya Naredla** | Storage & Evaluation Engineer | `monitor.py` module (`QueryMetrics` + `MetricsCollector`), live analytics dashboard in sidebar, per-pipeline latency comparison | 25% |
 | **Ruixuan Hou** | Reproducibility Lead | `requirements.txt`, `.streamlit/config.toml`, `Dockerfile`, deployment configuration, system status panel | 20% |
 | **Total** | | | **100%** |
-
----
-
-## Lab 9 — System Architecture
-
-```
-User Query (Streamlit UI — Premium Dark Theme)
-        ↓
-  [Pipeline Selector]
-  /             \
-Baseline       Adapted
-(agent.py)  (adapted_agent.py)
-  |                 |
-Snowflake      LocalStore
-RAG Retrieval  RAG Retrieval
-  |                 |
-Gemini 2.5    Llama-3 8B
-Flash API     QLoRA PEFT
-              (Colab + Ngrok)
-  \                 /
-   Risk Assessment
-   (calculate_risk_level)
-        ↓
-  Structured Execution Trace
-  (timed tool calls + reasoning steps)
-        ↓
-  MetricsCollector (monitor.py)
-        ↓
-  Streamlit Response
-  + Debug Panel + Analytics Dashboard
-```
-
----
-
-## Lab 9 — Enhancement Areas Covered
-
-| Area | Enhancement | Files Modified/Created |
-|---|---|---|
-| A. UI & Workflow | Premium dark theme, glassmorphism, reasoning panels, query history | `app.py` |
-| B. Monitoring | QueryMetrics, session analytics, per-pipeline comparison | `monitor.py`, `app.py` |
-| C. Logging | Structured traces with per-step timing in both agents | `agent.py`, `adapted_agent.py`, `app.py` |
-| D. Deployment | Docker, Streamlit config, requirements, error handling | `Dockerfile`, `.streamlit/config.toml`, `requirements.txt`, `app.py` |
 
 ---
 
@@ -76,10 +88,15 @@ Flash API     QLoRA PEFT
 
 | Deliverable | File | Status |
 |---|---|---|
+| Phase 3 Report | `Phase_3_Report_LexGuard.docx` | ✅ Complete |
+| Full-Doc LLM Extraction | `tools.py` (`extract_risk_clauses_llm`, `extract_contract_brief`) | ✅ Production |
+| Chat Persistence | `chat_history.py` | ✅ Snowflake-backed |
+| Dark/Light Theme | `app.py` (CSS variables + toggle) | ✅ Deployed |
+| BERT Evaluation | `evaluate_e2e.py` | ✅ 53.8% → deprecated |
 | Premium Streamlit UI | `app.py` | ✅ Dark theme + glassmorphism |
 | Monitoring Module | `monitor.py` | ✅ QueryMetrics + Analytics |
 | Structured Traces | `agent.py`, `adapted_agent.py` | ✅ Timed tool calls |
 | Deployment Config | `Dockerfile`, `.streamlit/config.toml` | ✅ Docker + Theme |
 | Dependencies | `requirements.txt` | ✅ Pinned versions |
-| Development Report | `LAB9_REPORT.md` | ✅ 1-2 pages |
+| Development Report | `LAB9_REPORT.md` | ✅ Complete |
 | Individual Reports | `CONTRIBUTION_*.md` | ✅ All 4 members |

@@ -31,6 +31,10 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
+import numpy as np
+from rank_bm25 import BM25Okapi
+from sentence_transformers import SentenceTransformer
+
 from lexguard_logger import get_logger
 
 logger = get_logger(__name__)
@@ -76,10 +80,12 @@ class LocalStore:
         "documents":    "kv_store_documents.json",
         "chunks":       "kv_store_chunks.json",
         "clause_index": "kv_store_clause_index.json",
+        "embeddings":   "kv_store_embeddings.json",
     }
 
-    def __init__(self, working_dir: str = "./project_data_store"):
+    def __init__(self, working_dir: str = "./project_data_store", dense_model: str = "all-MiniLM-L6-v2"):
         self.working_dir = working_dir
+        self._dense_model_name = dense_model
 
         # Auto-create working_dir (mirrors HyperGraphRAG.__post_init__)
         if not os.path.exists(self.working_dir):
@@ -90,6 +96,12 @@ class LocalStore:
         self.documents: dict = self._load("documents")
         self.chunks: dict = self._load("chunks")
         self.clause_index: dict = self._load("clause_index")
+        self.embeddings: dict = self._load("embeddings")
+
+        self._bm25 = None
+        self._dense_model = None
+        self._corpus_chunk_ids = []
+        self._corpus_embeddings = None
 
         logger.info(
             f"LocalStore initialized — "
@@ -97,6 +109,7 @@ class LocalStore:
             f"{len(self.chunks)} chunks, "
             f"{len(self.clause_index)} indexed keywords"
         )
+        self._build_indexes()
 
     # ──────────────────────────────────────────
     # Persistence (mirroring JsonKVStorage._load / index_done_callback)
@@ -189,6 +202,92 @@ class LocalStore:
 
         # Persist all stores after ingestion (mirrors HyperGraphRAG._insert_done)
         self.save_all()
+        # Rebuild indexes for hybrid search
+        self._build_indexes()
+
+    # ──────────────────────────────────────────
+    # Index Building & Hybrid Search
+    # ──────────────────────────────────────────
+    def _build_indexes(self) -> None:
+        """Builds BM25 and dense embedding structures for quick retrieval."""
+        if not self.chunks:
+            return
+            
+        self._corpus_chunk_ids = list(self.chunks.keys())
+        corpus_texts = [self.chunks[cid]["text"] for cid in self._corpus_chunk_ids]
+        
+        # 1. Sparse: BM25
+        tokenized_corpus = [text.lower().split() for text in corpus_texts]
+        self._bm25 = BM25Okapi(tokenized_corpus)
+        
+        # 2. Dense: Embeddings
+        missing_ids = [cid for cid in self._corpus_chunk_ids if cid not in self.embeddings]
+        if missing_ids:
+            if self._dense_model is None:
+                self._dense_model = SentenceTransformer(self._dense_model_name)
+            
+            logger.info(f"Computing dense embeddings for {len(missing_ids)} chunks using {self._dense_model_name}...")
+            missing_texts = [self.chunks[cid]["text"] for cid in missing_ids]
+            new_embeddings = self._dense_model.encode(missing_texts, convert_to_numpy=True)
+            for cid, emb in zip(missing_ids, new_embeddings):
+                self.embeddings[cid] = emb.tolist()
+            self._save("embeddings")
+            
+        emb_list = [self.embeddings[cid] for cid in self._corpus_chunk_ids]
+        self._corpus_embeddings = np.array(emb_list, dtype=np.float32)
+
+    def search_hybrid(self, query: str, top_k: int = 3) -> list[dict]:
+        """Hybrid search combining Dense and BM25 retrievers."""
+        if not self.chunks or not self._corpus_chunk_ids:
+            return []
+            
+        # 1. BM25 Retrieval
+        tokenized_query = query.lower().split()
+        bm25_scores = self._bm25.get_scores(tokenized_query)
+        bm25_top_idx = np.argsort(bm25_scores)[::-1][:top_k]
+        
+        # 2. Dense Retrieval
+        if self._dense_model is None:
+            self._dense_model = SentenceTransformer("all-MiniLM-L6-v2")
+            
+        query_emb = self._dense_model.encode(query, convert_to_numpy=True)
+        # Cosine similarity
+        from sentence_transformers import util
+        cos_scores = util.cos_sim(query_emb, self._corpus_embeddings)[0].numpy()
+        dense_top_idx = np.argsort(cos_scores)[::-1][:top_k]
+        
+        # Merge and deduplicate
+        combined_cids = set()
+        results = []
+        
+        # Add Sparse results
+        for idx in bm25_top_idx:
+            cid = self._corpus_chunk_ids[idx]
+            if bm25_scores[idx] > 0 and cid not in combined_cids:
+                combined_cids.add(cid)
+                chunk_data = self.chunks[cid]
+                results.append({
+                    "chunk_id": cid,
+                    "doc_name": chunk_data["doc_name"],
+                    "text": chunk_data["text"],
+                    "source": "Sparse (BM25)"
+                })
+                
+        # Add Dense results
+        for idx in dense_top_idx:
+            cid = self._corpus_chunk_ids[idx]
+            if cid not in combined_cids:
+                combined_cids.add(cid)
+                chunk_data = self.chunks[cid]
+                results.append({
+                    "chunk_id": cid,
+                    "doc_name": chunk_data["doc_name"],
+                    "text": chunk_data["text"],
+                    "source": "Dense (BERT)"
+                })
+                
+        logger.info(f"search_hybrid('{query}') → {len(results)} merged results")
+        return results
 
     # ──────────────────────────────────────────
     # Retrieval

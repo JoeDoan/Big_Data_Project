@@ -16,3 +16,9 @@ __pycache__/
 # Logs & output
 logs/
 *.log
+
+# Large data stores (regenerable)
+evaluate_store/
+evaluate_store_BAAI_bge_small_en_v1.5/
+evaluate_store_all_MiniLM_L6_v2/
+project_data_store/
