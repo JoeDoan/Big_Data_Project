@@ -60,7 +60,7 @@ def run_lexguard_agent(user_query: str, local_context: str = None, pre_extracted
 
     def get_all_extracted_clauses() -> str:
         """
-        Retrieves ALL 12 pre-extracted risk clauses from the contract at once.
+        Retrieves ALL 41 pre-extracted risk clauses from the contract at once.
         Use this tool when the user asks to "list all risks", "show all extracted clauses", or requests a comprehensive risk profile.
         """
         if not pre_extracted_clauses:

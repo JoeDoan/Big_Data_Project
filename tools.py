@@ -37,20 +37,51 @@ def expand_fragment_to_sentence(chunk: str, fragment_start: int, fragment_end: i
 
 # Removed externalbrowser to use standard password auth that worked for ingest.py
 
-# Define the exact CUAD prompts mapping
+# Define the exact CUAD prompts mapping — all 41 CUAD clause categories
 CUAD_PROMPTS = {
+    # ── Original 12 clauses ──
     "Effective Date": 'Highlight the parts (if any) of this contract related to "Effective Date" that should be reviewed by a lawyer. Details: The date when the contract is effective',
     "Governing Law": 'Highlight the parts (if any) of this contract related to "Governing Law" that should be reviewed by a lawyer. Details: Which state/country\'s law governs the interpretation of the contract?',
     "Uncapped Liability": 'Highlight the parts (if any) of this contract related to "Uncapped Liability" that should be reviewed by a lawyer. Details: Is a party\'s liability uncapped upon the breach of its obligation in the contract? This also includes uncap liability for a particular type of breach such as IP infringement or breach of confidentiality obligation.',
     "Cap on Liability": 'Highlight the parts (if any) of this contract related to "Cap On Liability" that should be reviewed by a lawyer. Details: Does the contract include a cap on liability upon the breach of a party\'s obligation? This includes time limitation for the counterparty to bring claims or maximum amount for recovery.',
-    "Non-Compete": 'Highlight the parts (if any) of this contract related to "Non-Compete" that should be reviewed by a lawyer. Details: Is there a restriction on the ability of a party to compete with the counterparty or operate in a certain geography or business or act as a founder, director or employee of a competing entity?',
-    "Exclusivity": 'Highlight the parts (if any) of this contract related to "Exclusivity" that should be reviewed by a lawyer. Details: Is a party exclusive to the other party? This would include a commitment to procure all requirements from one party of a certain type, or a commitment to only sell to one party.',
-    "Audit Rights": 'Highlight the parts (if any) of this contract related to "Audit Rights" that should be reviewed by a lawyer. Details: Does a party have the right to audit the books and records of the counterparty to determine compliance with the contract?',
+    "Non-Compete": 'Highlight the parts (if any) of this contract related to "Non-Compete" that should be reviewed by a lawyer. Details: Is there a restriction on the ability of a party to compete with the counterparty or operate in a certain geography or business or technology sector?',
+    "Exclusivity": 'Highlight the parts (if any) of this contract related to "Exclusivity" that should be reviewed by a lawyer. Details: Is there an exclusive dealing commitment with the counterparty? This includes a commitment to procure all \u201crequirements\u201d from one party of certain technology, goods, or services or a prohibition on licensing or selling technology, goods or services to third parties, or a prohibition on collaborating or working with other parties), whether during the contract or after the contract ends (or both).',
+    "Audit Rights": 'Highlight the parts (if any) of this contract related to "Audit Rights" that should be reviewed by a lawyer. Details: Does a party have the right to audit the books, records, or physical locations of the counterparty to ensure compliance with the contract?',
     "Change of Control": 'Highlight the parts (if any) of this contract related to "Change Of Control" that should be reviewed by a lawyer. Details: Does one party have the right to terminate or is consent or notice required of the counterparty if such party undergoes a change of control, such as a merger, stock sale, transfer of all or substantially all of its assets or business, or assignment by operation of law?',
-    "Liquidated Damages": 'Highlight the parts (if any) of this contract related to "Liquidated Damages" that should be reviewed by a lawyer. Details: Does the contract contain a clause that would award either party liquidated damages or some sort of penalty assessment for a breach of the contract?',
+    "Liquidated Damages": 'Highlight the parts (if any) of this contract related to "Liquidated Damages" that should be reviewed by a lawyer. Details: Does the contract contain a clause that would award either party liquidated damages for breach or a fee upon the termination of a contract (termination fee)?',
     "Termination for Convenience": 'Highlight the parts (if any) of this contract related to "Termination For Convenience" that should be reviewed by a lawyer. Details: Can a party terminate this contract without cause (solely by giving a notice and allowing a waiting period to expire)?',
-    "IP Ownership Assignment": 'Highlight the parts (if any) of this contract related to "IP Ownership Assignment" that should be reviewed by a lawyer. Details: Does the contract carry any intellectual property (IP) assignment, transfer, or sale obligations (other than software escrows)?',
-    "Source Code Escrow": 'Highlight the parts (if any) of this contract related to "Source Code Escrow" that should be reviewed by a lawyer. Details: Is one party required to deposit its source code into escrow with a third party, which can be released to the counterparty upon the occurrence of certain events (bankruptcy, insolvency, etc.)?'
+    "IP Ownership Assignment": 'Highlight the parts (if any) of this contract related to "Ip Ownership Assignment" that should be reviewed by a lawyer. Details: Does intellectual property created by one party become the property of the counterparty, either per the terms of the contract or upon the occurrence of certain events?',
+    "Source Code Escrow": 'Highlight the parts (if any) of this contract related to "Source Code Escrow" that should be reviewed by a lawyer. Details: Is one party required to deposit its source code into escrow with a third party, which can be released to the counterparty upon the occurrence of certain events (bankruptcy, insolvency, etc.)?',
+    # ── 29 additional CUAD clauses ──
+    "Document Name": 'Highlight the parts (if any) of this contract related to "Document Name" that should be reviewed by a lawyer. Details: The name of the contract',
+    "Parties": 'Highlight the parts (if any) of this contract related to "Parties" that should be reviewed by a lawyer. Details: The two or more parties who signed the contract',
+    "Agreement Date": 'Highlight the parts (if any) of this contract related to "Agreement Date" that should be reviewed by a lawyer. Details: The date of the contract',
+    "Expiration Date": 'Highlight the parts (if any) of this contract related to "Expiration Date" that should be reviewed by a lawyer. Details: On what date will the contract\'s initial term expire?',
+    "Renewal Term": 'Highlight the parts (if any) of this contract related to "Renewal Term" that should be reviewed by a lawyer. Details: What is the renewal term after the initial term expires? This includes automatic extensions and unilateral extensions with prior notice.',
+    "Notice Period to Terminate Renewal": 'Highlight the parts (if any) of this contract related to "Notice Period To Terminate Renewal" that should be reviewed by a lawyer. Details: What is the notice period required to terminate renewal?',
+    "Most Favored Nation": 'Highlight the parts (if any) of this contract related to "Most Favored Nation" that should be reviewed by a lawyer. Details: Is there a clause that if a third party gets better terms on the licensing or sale of technology/goods/services described in the contract, the buyer of such technology/goods/services under the contract shall be entitled to those better terms?',
+    "No-Solicit of Customers": 'Highlight the parts (if any) of this contract related to "No-Solicit Of Customers" that should be reviewed by a lawyer. Details: Is a party restricted from contracting or soliciting customers or partners of the counterparty, whether during the contract or after the contract ends (or both)?',
+    "Competitive Restriction Exception": 'Highlight the parts (if any) of this contract related to "Competitive Restriction Exception" that should be reviewed by a lawyer. Details: This category includes the exceptions or carveouts to Non-Compete, Exclusivity and No-Solicit of Customers above.',
+    "No-Solicit of Employees": 'Highlight the parts (if any) of this contract related to "No-Solicit Of Employees" that should be reviewed by a lawyer. Details: Is there a restriction on a party\'s soliciting or hiring employees and/or contractors from the counterparty, whether during the contract or after the contract ends (or both)?',
+    "Non-Disparagement": 'Highlight the parts (if any) of this contract related to "Non-Disparagement" that should be reviewed by a lawyer. Details: Is there a requirement on a party not to disparage the counterparty?',
+    "ROFR/ROFO/ROFN": 'Highlight the parts (if any) of this contract related to "Rofr/Rofo/Rofn" that should be reviewed by a lawyer. Details: Is there a clause granting one party a right of first refusal, right of first offer or right of first negotiation to purchase, license, market, or distribute equity interest, technology, assets, products or services?',
+    "Anti-Assignment": 'Highlight the parts (if any) of this contract related to "Anti-Assignment" that should be reviewed by a lawyer. Details: Is consent or notice required of a party if the contract is assigned to a third party?',
+    "Revenue/Profit Sharing": 'Highlight the parts (if any) of this contract related to "Revenue/Profit Sharing" that should be reviewed by a lawyer. Details: Is one party required to share revenue or profit with the counterparty for any technology, goods, or services?',
+    "Price Restrictions": 'Highlight the parts (if any) of this contract related to "Price Restrictions" that should be reviewed by a lawyer. Details: Is there a restriction on the ability of a party to raise or reduce prices of technology, goods, or services provided?',
+    "Minimum Commitment": 'Highlight the parts (if any) of this contract related to "Minimum Commitment" that should be reviewed by a lawyer. Details: Is there a minimum order size or minimum amount or units per-time period that one party must buy from the counterparty under the contract?',
+    "Volume Restriction": 'Highlight the parts (if any) of this contract related to "Volume Restriction" that should be reviewed by a lawyer. Details: Is there a fee increase or consent requirement, etc. if one party\'s use of the product/services exceeds certain threshold?',
+    "Joint IP Ownership": 'Highlight the parts (if any) of this contract related to "Joint Ip Ownership" that should be reviewed by a lawyer. Details: Is there any clause providing for joint or shared ownership of intellectual property between the parties to the contract?',
+    "License Grant": 'Highlight the parts (if any) of this contract related to "License Grant" that should be reviewed by a lawyer. Details: Does the contract contain a license granted by one party to its counterparty?',
+    "Non-Transferable License": 'Highlight the parts (if any) of this contract related to "Non-Transferable License" that should be reviewed by a lawyer. Details: Does the contract limit the ability of a party to transfer the license being granted to a third party?',
+    "Affiliate License-Licensor": 'Highlight the parts (if any) of this contract related to "Affiliate License-Licensor" that should be reviewed by a lawyer. Details: Does the contract contain a license grant by affiliates of the licensor or that includes intellectual property of affiliates of the licensor?',
+    "Affiliate License-Licensee": 'Highlight the parts (if any) of this contract related to "Affiliate License-Licensee" that should be reviewed by a lawyer. Details: Does the contract contain a license grant to a licensee (incl. sublicensor) and the affiliates of such licensee/sublicensor?',
+    "Unlimited/All-You-Can-Eat License": 'Highlight the parts (if any) of this contract related to "Unlimited/All-You-Can-Eat-License" that should be reviewed by a lawyer. Details: Is there a clause granting one party an \u201centerprise,\u201d \u201call you can eat\u201d or unlimited usage license?',
+    "Irrevocable or Perpetual License": 'Highlight the parts (if any) of this contract related to "Irrevocable Or Perpetual License" that should be reviewed by a lawyer. Details: Does the contract contain a license grant that is irrevocable or perpetual?',
+    "Post-Termination Services": 'Highlight the parts (if any) of this contract related to "Post-Termination Services" that should be reviewed by a lawyer. Details: Is a party subject to obligations after the termination or expiration of a contract, including any post-termination transition, payment, transfer of IP, wind-down, last-buy, or similar commitments?',
+    "Warranty Duration": 'Highlight the parts (if any) of this contract related to "Warranty Duration" that should be reviewed by a lawyer. Details: What is the duration of any warranty against defects or errors in technology, products, or services provided under the contract?',
+    "Insurance": 'Highlight the parts (if any) of this contract related to "Insurance" that should be reviewed by a lawyer. Details: Is there a requirement for insurance that must be maintained by one party for the benefit of the counterparty?',
+    "Covenant Not to Sue": 'Highlight the parts (if any) of this contract related to "Covenant Not To Sue" that should be reviewed by a lawyer. Details: Is a party restricted from contesting the validity of the counterparty\'s ownership of intellectual property or otherwise bringing a claim against the counterparty for matters unrelated to the contract?',
+    "Third Party Beneficiary": 'Highlight the parts (if any) of this contract related to "Third Party Beneficiary" that should be reviewed by a lawyer. Details: Is there a non-contracting party who is a beneficiary to some or all of the clauses in the contract and therefore can enforce its rights against a contracting party?',
 }
 
 def extract_clause_with_bert(clause_type: str, context_text: str) -> str:
@@ -207,7 +238,7 @@ def retrieve_local_clauses(search_term: str, top_k: int = 5) -> str:
 def extract_risk_clauses_llm(context: str) -> dict:
     """
     Full-document LLM-based risk clause detection with source text annotations.
-    Replaces BERT for the 12 CUAD clause types. Returns structured results with
+    Replaces BERT for the 41 CUAD clause types. Returns structured results with
     exact excerpts the LLM used to make its determination.
     """
     from google import genai
@@ -225,9 +256,38 @@ def extract_risk_clauses_llm(context: str) -> dict:
 9. **Liquidated Damages**: Are there pre-determined penalty amounts for breach?
 10. **Termination for Convenience**: Can either party terminate without cause by giving notice?
 11. **IP Ownership Assignment**: Is there any IP assignment, transfer, or sale obligation?
-12. **Source Code Escrow**: Is source code required to be deposited in escrow?"""
+12. **Source Code Escrow**: Is source code required to be deposited in escrow?
+13. **Document Name**: What is the official name or title of this contract?
+14. **Parties**: Who are the two or more parties who signed the contract?
+15. **Agreement Date**: What is the date the contract was signed or executed?
+16. **Expiration Date**: On what date will the contract's initial term expire?
+17. **Renewal Term**: What is the renewal term after the initial term expires?
+18. **Notice Period to Terminate Renewal**: What is the notice period required to terminate renewal?
+19. **Most Favored Nation**: Is there a most favored nation clause entitling a party to better terms given to third parties?
+20. **No-Solicit of Customers**: Is a party restricted from soliciting customers or partners of the counterparty?
+21. **Competitive Restriction Exception**: Are there exceptions or carveouts to Non-Compete, Exclusivity, or No-Solicit clauses?
+22. **No-Solicit of Employees**: Is there a restriction on soliciting or hiring employees/contractors of the counterparty?
+23. **Non-Disparagement**: Is there a requirement on a party not to disparage the counterparty?
+24. **ROFR/ROFO/ROFN**: Is there a right of first refusal, offer, or negotiation clause?
+25. **Anti-Assignment**: Is consent or notice required if the contract is assigned to a third party?
+26. **Revenue/Profit Sharing**: Is one party required to share revenue or profit with the counterparty?
+27. **Price Restrictions**: Is there a restriction on the ability to raise or reduce prices of goods/services?
+28. **Minimum Commitment**: Is there a minimum order size or amount that must be purchased?
+29. **Volume Restriction**: Is there a fee increase or consent requirement if usage exceeds a threshold?
+30. **Joint IP Ownership**: Is there joint or shared ownership of intellectual property between the parties?
+31. **License Grant**: Does the contract contain a license granted by one party to its counterparty?
+32. **Non-Transferable License**: Does the contract limit the ability to transfer the license to a third party?
+33. **Affiliate License-Licensor**: Does the contract include a license grant by affiliates of the licensor?
+34. **Affiliate License-Licensee**: Does the contract include a license grant to the licensee's affiliates?
+35. **Unlimited/All-You-Can-Eat License**: Is there an enterprise or unlimited usage license?
+36. **Irrevocable or Perpetual License**: Does the contract contain a license that is irrevocable or perpetual?
+37. **Post-Termination Services**: Is a party subject to obligations after termination or expiration?
+38. **Warranty Duration**: What is the duration of any warranty against defects or errors?
+39. **Insurance**: Is there an insurance requirement for one party's benefit?
+40. **Covenant Not to Sue**: Is a party restricted from contesting the counterparty's IP ownership or bringing unrelated claims?
+41. **Third Party Beneficiary**: Is there a non-contracting party who is a beneficiary and can enforce rights?"""
 
-    prompt = f"""You are an expert contract risk auditor. Analyze this contract for the following 12 risk clause categories.
+    prompt = f"""You are an expert contract risk auditor. Analyze this contract for the following 41 risk clause categories.
 
 For EACH clause type, determine:
 - Whether it is present in the contract (true/false)
@@ -265,7 +325,7 @@ CONTRACT TEXT:
 {context[:200000]}"""
 
     try:
-        print(f"🔧 Tool Invoked: LLM Risk Clause Scan (12 clauses, full-document)...")
+        print(f"🔧 Tool Invoked: LLM Risk Clause Scan (41 clauses, full-document)...")
         client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
         response = client.models.generate_content(
             model='gemini-2.5-flash',

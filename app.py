@@ -343,7 +343,7 @@ with st.sidebar:
                     st.session_state.local_context = uploaded_file.read().decode("utf-8")
                 st.session_state.uploaded_filename = uploaded_file.name
                 
-            with st.spinner("🧠 Scanning document for 12 critical legal risks (LLM Full-Doc)..."):
+            with st.spinner("🧠 Scanning document for 41 critical legal risks (LLM Full-Doc)..."):
                 from tools import extract_risk_clauses_llm
                 risk_data = extract_risk_clauses_llm(st.session_state.local_context)
                 st.session_state.local_extracted_clauses = risk_data
